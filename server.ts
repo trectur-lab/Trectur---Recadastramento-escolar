@@ -1,6 +1,5 @@
 import express from "express";
 import "dotenv/config";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
@@ -135,15 +134,15 @@ async function seedDatabase() {
   console.log("[Server] Seeding completed.");
 }
 
-async function startServer() {
+export const app = express();
+const PORT = 3000;
+
+export async function startServer() {
   console.log("[Server] Starting initialization...");
   console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
-  const PORT = 3000;
   console.log(`[Server] Starting in ${process.env.NODE_ENV} mode on port ${PORT}`);
   console.log(`[Server] Environment APP_URL: ${process.env.APP_URL}`);
   
-  const app = express();
-
   // Trust proxy is important for apps behind Nginx/Cloud Run
   app.set('trust proxy', 1);
 
@@ -1241,25 +1240,30 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Listening on http://0.0.0.0:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[Server] Listening on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
-startServer().catch(err => {
-  console.error("CRITICAL: Failed to start server:", err);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch(err => {
+    console.error("CRITICAL: Failed to start server:", err);
+    process.exit(1);
+  });
+}
